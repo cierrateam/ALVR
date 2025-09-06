@@ -1032,7 +1032,7 @@ fn connection_pipeline(
         }
     });
 
-    let object_tracker_receive_thread = thread::spawn({
+    let _object_tracker_receive_thread = thread::spawn({
         let ctx = Arc::clone(&ctx);
         let client_hostname = client_hostname.clone();
         move || {

@@ -536,8 +536,6 @@ pub fn tracking_loop(
     }
 }
 
-use std::collections::HashMap;
-
 pub fn object_tracker_loop(
     ctx: &ConnectionContext,
     mut object_tracker_receiver: StreamReceiver<ObjectTrackers>,
