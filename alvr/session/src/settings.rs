@@ -948,6 +948,18 @@ pub struct BodyTrackingConfig {
 
 #[derive(SettingsSchema, Serialize, Deserialize, Clone)]
 #[schema(collapsible)]
+pub struct ObjectTrackingConfig {
+    #[schema(strings(help = "Turn this off to temporarily pause tracking."))]
+    #[schema(flag = "real-time")]
+    pub tracked: bool,
+    
+    #[schema(strings(help = "Maximum number of object trackers to use (1-6)."))]
+    #[schema(gui(slider(min = 1, max = 6, step = 1)))]
+    pub max_trackers: u8,
+}
+
+#[derive(SettingsSchema, Serialize, Deserialize, Clone)]
+#[schema(collapsible)]
 pub struct VMCConfig {
     pub host: String,
     pub port: u16,
@@ -1271,6 +1283,9 @@ Tilted: the world gets tilted when long pressing the oculus button. This is usef
 
     #[schema(flag = "steamvr-restart")]
     pub body_tracking: Switch<BodyTrackingConfig>,
+
+    #[schema(flag = "steamvr-restart")]
+    pub object_tracking: Switch<ObjectTrackingConfig>,
 
     #[schema(flag = "steamvr-restart")]
     #[schema(strings(display_name = "VMC"))]
@@ -1906,6 +1921,14 @@ pub fn session_settings_default() -> SettingsDefault {
                         variant: BodyTrackingSinkConfigDefaultVariant::FakeViveTracker,
                     },
                     tracked: true,
+                },
+            },
+            object_tracking: SwitchDefault {
+                enabled: false,
+                content: ObjectTrackingConfigDefault {
+                    gui_collapsed: true,
+                    tracked: true,
+                    max_trackers: 3,
                 },
             },
             vmc: SwitchDefault {

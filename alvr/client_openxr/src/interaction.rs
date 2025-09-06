@@ -136,6 +136,7 @@ pub enum BodyTracker {
 pub struct InteractionSourcesConfig {
     pub face_tracking: Option<FaceTrackingSourcesConfig>,
     pub body_tracking: Option<BodyTrackingSourcesConfig>,
+    pub object_tracking: Option<()>, // Placeholder for object tracking config
     pub prefers_multimodal_input: bool,
 }
 
@@ -154,6 +155,12 @@ impl InteractionSourcesConfig {
                 .body_tracking
                 .as_option()
                 .map(|c| c.sources.clone()),
+            object_tracking: config
+                .settings
+                .headset
+                .object_tracking
+                .as_option()
+                .map(|_| ()), // Just a placeholder to indicate object tracking is enabled
             prefers_multimodal_input: config
                 .settings
                 .headset
@@ -176,6 +183,7 @@ pub struct InteractionContext {
     pub multimodal_hands_enabled: bool,
     pub face_sources: FaceSources,
     pub body_source: Option<BodyTracker>,
+    pub object_tracker: Option<MotionTrackerBD>,
 }
 
 impl InteractionContext {
@@ -471,6 +479,7 @@ impl InteractionContext {
                 face_expressions_tracker,
             },
             body_source: None,
+            object_tracker: None,
         }
     }
 
@@ -641,6 +650,16 @@ impl InteractionContext {
                     }
                 }
             }
+        }
+
+        // Separate object tracking for dedicated SteamVR Generic Trackers
+        if config.object_tracking.is_some() {
+            self.object_tracker = check_ext_object(
+                "MotionTrackerBD (object tracking for SteamVR Generic Trackers)",
+                MotionTrackerBD::new(self.xr_session.clone(), &self.extra_extensions),
+            );
+        } else {
+            self.object_tracker = None;
         }
     }
 }
@@ -1072,4 +1091,33 @@ pub fn get_bd_motion_trackers(source: &BodyTracker, time: Duration) -> Vec<(u64,
     }
 
     Vec::new()
+}
+
+use alvr_packets::ObjectTrackerSample;
+
+pub fn get_object_trackers(
+    object_tracker: &MotionTrackerBD,
+    time: Duration,
+    max_trackers: usize,
+) -> Vec<ObjectTrackerSample> {
+    let xr_time = crate::to_xr_time(time);
+
+    if let Some(trackers) = object_tracker.locate_motion_trackers(xr_time).ok().flatten() {
+        let mut samples = Vec::with_capacity(max_trackers.min(trackers.len()));
+
+        for item in trackers.iter().take(max_trackers) {
+            samples.push(ObjectTrackerSample {
+                serial: item.serial.serial,
+                pose: crate::from_xr_pose(item.local_pose.pose),
+                linear_velocity: crate::from_xr_vec3(item.local_pose.linear_velocity),
+                angular_velocity: crate::from_xr_vec3(item.local_pose.angular_velocity),
+                confidence: item.confidence.0 as u8,
+                timestamp_ns: time.as_nanos() as u64,
+            });
+        }
+
+        samples
+    } else {
+        Vec::new()
+    }
 }

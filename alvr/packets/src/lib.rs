@@ -1,7 +1,7 @@
 use alvr_common::{
     BodySkeleton, ConnectionState, DeviceMotion, LogEntry, LogSeverity, Pose, ViewParams,
     anyhow::Result,
-    glam::{Quat, UVec2, Vec2},
+    glam::{Quat, UVec2, Vec2, Vec3},
     semver::Version,
 };
 use alvr_session::{
@@ -22,6 +22,7 @@ pub const HAPTICS: u16 = 1;
 pub const AUDIO: u16 = 2;
 pub const VIDEO: u16 = 3;
 pub const STATISTICS: u16 = 4;
+pub const OBJECT_TRACKERS: u16 = 5;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VideoStreamingCapabilitiesExt {
@@ -225,6 +226,21 @@ pub struct TrackingData {
     pub hand_skeletons: [Option<[Pose; 26]>; 2],
     pub face: FaceData,
     pub body: Option<BodySkeleton>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ObjectTrackerSample {
+    pub serial: [u8; 24],
+    pub pose: Pose,
+    pub linear_velocity: Vec3,
+    pub angular_velocity: Vec3,
+    pub confidence: u8,
+    pub timestamp_ns: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ObjectTrackers {
+    pub trackers: Vec<ObjectTrackerSample>,
 }
 
 #[derive(Serialize, Deserialize)]

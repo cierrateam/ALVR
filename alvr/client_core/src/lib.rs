@@ -24,7 +24,7 @@ use alvr_common::{
     warn,
 };
 use alvr_packets::{
-    BatteryInfo, ButtonEntry, ClientControlPacket, RealTimeConfig, StreamConfig, TrackingData,
+    BatteryInfo, ButtonEntry, ClientControlPacket, ObjectTrackers, RealTimeConfig, StreamConfig, TrackingData,
 };
 use alvr_session::CodecType;
 use connection::{ConnectionContext, DecoderCallback};
@@ -219,6 +219,14 @@ impl ClientCoreContext {
             if let Some(stats) = &mut *self.connection_context.statistics_manager.lock() {
                 stats.report_input_acquired(data.poll_timestamp);
             }
+        }
+    }
+
+    pub fn send_object_trackers(&self, data: alvr_packets::ObjectTrackers) {
+        dbg_client_core!("send_object_trackers");
+
+        if let Some(sender) = &mut *self.connection_context.tracking_sender.lock() {
+            sender.send_header(&data).ok();
         }
     }
 
