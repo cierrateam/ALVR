@@ -20,7 +20,7 @@ use alvr_common::{
 use alvr_events::{AdbEvent, ButtonEvent, EventType};
 use alvr_packets::{
     AUDIO, ClientConnectionResult, ClientControlPacket, ClientListAction, ClientStatistics,
-    HAPTICS, NegotiatedStreamingConfig, NegotiatedStreamingConfigExt, RealTimeConfig, STATISTICS,
+    HAPTICS, NegotiatedStreamingConfig, NegotiatedStreamingConfigExt, OBJECT_TRACKERS, RealTimeConfig, STATISTICS,
     ServerControlPacket, StreamConfigPacket, TRACKING, TrackingData, VIDEO, VideoPacketHeader,
 };
 use alvr_session::{
@@ -820,6 +820,8 @@ fn connection_pipeline(
         stream_socket.subscribe_to_stream(AUDIO, MAX_UNREAD_PACKETS);
     let tracking_receiver =
         stream_socket.subscribe_to_stream::<TrackingData>(TRACKING, MAX_UNREAD_PACKETS);
+    let object_tracker_receiver =
+        stream_socket.subscribe_to_stream::<alvr_packets::ObjectTrackers>(OBJECT_TRACKERS, MAX_UNREAD_PACKETS);
     let haptics_sender = stream_socket.request_stream(HAPTICS);
     let mut statics_receiver =
         stream_socket.subscribe_to_stream::<ClientStatistics>(STATISTICS, MAX_UNREAD_PACKETS);
@@ -1025,6 +1027,18 @@ fn connection_pipeline(
                 initial_settings,
                 hand_gesture_manager,
                 tracking_receiver,
+                || is_streaming(&client_hostname),
+            );
+        }
+    });
+
+    let object_tracker_receive_thread = thread::spawn({
+        let ctx = Arc::clone(&ctx);
+        let client_hostname = client_hostname.clone();
+        move || {
+            tracking::object_tracker_loop(
+                &ctx,
+                object_tracker_receiver,
                 || is_streaming(&client_hostname),
             );
         }

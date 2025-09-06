@@ -20,7 +20,7 @@ use alvr_common::{
     parking_lot::Mutex,
 };
 use alvr_events::{EventType, TrackingEvent};
-use alvr_packets::TrackingData;
+use alvr_packets::{ObjectTrackers, TrackingData};
 use alvr_session::{
     BodyTrackingConfig, HeadsetConfig, PositionRecenteringMode, RotationRecenteringMode, Settings,
     VMCConfig, settings_schema::Switch,
@@ -532,6 +532,47 @@ pub fn tracking_loop(
                 })
                 .collect::<Vec<_>>();
             sink.send_tracking(&device_motions);
+        }
+    }
+}
+
+use std::collections::HashMap;
+
+pub fn object_tracker_loop(
+    ctx: &ConnectionContext,
+    mut object_tracker_receiver: StreamReceiver<ObjectTrackers>,
+    is_streaming: impl Fn() -> bool,
+) {
+    // Map from serial to device ID for tracking active trackers
+    let mut active_trackers: HashMap<[u8; 24], u64> = HashMap::new();
+    
+    while is_streaming() {
+        let data = match object_tracker_receiver.recv(STREAMING_RECV_TIMEOUT) {
+            Ok(trackers) => trackers,
+            Err(ConnectionError::TryAgain(_)) => continue,
+            Err(ConnectionError::Other(_)) => return,
+        };
+        let Ok(object_trackers) = data.get_header() else {
+            return;
+        };
+
+        // TODO: Create/update SteamVR Generic Tracker devices based on the received tracker data
+        // For now, just log the received data for debugging
+        for tracker in &object_trackers.trackers {
+            if !active_trackers.contains_key(&tracker.serial) {
+                // New tracker detected - create a SteamVR Generic Tracker device
+                // TODO: Add logic to create FakeViveTracker for this serial
+                let device_id = alvr_common::hash_string(&format!("object_tracker_{:?}", tracker.serial));
+                active_trackers.insert(tracker.serial, device_id);
+                alvr_common::info!(
+                    "New object tracker detected: serial={:?}, device_id={}",
+                    tracker.serial,
+                    device_id
+                );
+            }
+            
+            // TODO: Update the tracker's pose in SteamVR
+            // This would involve calling the OpenVR driver to update the tracker's pose
         }
     }
 }
