@@ -20,7 +20,7 @@ use alvr_common::{
     parking_lot::Mutex,
 };
 use alvr_events::{EventType, TrackingEvent};
-use alvr_packets::TrackingData;
+use alvr_packets::{ObjectTrackers, TrackingData};
 use alvr_session::{
     BodyTrackingConfig, HeadsetConfig, PositionRecenteringMode, RotationRecenteringMode, Settings,
     VMCConfig, settings_schema::Switch,
@@ -533,5 +533,94 @@ pub fn tracking_loop(
                 .collect::<Vec<_>>();
             sink.send_tracking(&device_motions);
         }
+    }
+}
+
+pub fn object_tracker_loop(
+    ctx: &ConnectionContext,
+    mut object_tracker_receiver: StreamReceiver<ObjectTrackers>,
+    is_streaming: impl Fn() -> bool,
+) {
+    // Map from serial to device ID for tracking active trackers
+    let mut active_trackers: HashMap<[u8; 24], u64> = HashMap::new();
+    
+    while is_streaming() {
+        let data = match object_tracker_receiver.recv(STREAMING_RECV_TIMEOUT) {
+            Ok(trackers) => trackers,
+            Err(ConnectionError::TryAgain(_)) => continue,
+            Err(ConnectionError::Other(_)) => return,
+        };
+        let Ok(object_trackers) = data.get_header() else {
+            return;
+        };
+
+        // Process received object tracker data
+        for tracker in &object_trackers.trackers {
+            if !active_trackers.contains_key(&tracker.serial) {
+                // New tracker detected - create a SteamVR Generic Tracker device
+                let device_id = alvr_common::hash_string(&format!("object_tracker_{:?}", tracker.serial));
+                active_trackers.insert(tracker.serial, device_id);
+                
+                alvr_common::info!(
+                    "New object tracker detected: serial={:?}, device_id={}",
+                    tracker.serial,
+                    device_id
+                );
+
+                // TODO: Implement dynamic SteamVR Generic Tracker creation
+                // This requires:
+                // 1. Create a new FakeViveTracker instance with the device_id
+                // 2. Register it with the OpenVR driver via the C++ interface
+                // 3. Add it to the tracked_devices map in g_driver_provider
+                // 
+                // Suggested implementation approach:
+                // - Add a C API function to create_object_tracker(device_id, serial)
+                // - Call it via FFI from Rust to create the tracker dynamically
+                // - The C++ function should:
+                //   * Create: auto tracker = std::make_unique<FakeViveTracker>(device_id);
+                //   * Set serial: tracker->set_serial_number(format_serial(serial));
+                //   * Register: tracker->register_device(true);
+                //   * Store: g_driver_provider.generic_trackers.push_back(std::move(tracker));
+                //   * Track: g_driver_provider.tracked_devices.insert({device_id, tracker.get()});
+
+                // Send event to notify about new tracker
+                ctx.events_sender
+                    .send(crate::ServerCoreEvent::CreateGenericTracker {
+                        device_id,
+                        serial: tracker.serial,
+                    })
+                    .ok();
+            }
+            
+            // Update the tracker's pose in SteamVR
+            let device_id = active_trackers[&tracker.serial];
+            
+            // TODO: Implement pose updates via OpenVR driver
+            // This requires:
+            // 1. Convert tracker.pose from ALVR space to OpenVR space
+            // 2. Call the OpenVR driver to update the tracker's pose
+            // 
+            // Suggested implementation approach:
+            // - Add a C API function to update_object_tracker_pose(device_id, pose, velocities)
+            // - Call it via FFI from Rust with the tracker pose data
+            // - The C++ function should:
+            //   * Find the tracker: auto* tracker = tracked_devices[device_id];
+            //   * Update pose: tracker->OnPoseUpdated(timestamp, &ffi_motion);
+            
+            // For now, send tracking event through existing system
+            ctx.events_sender
+                .send(crate::ServerCoreEvent::UpdateObjectTracker {
+                    device_id,
+                    pose: tracker.pose,
+                    linear_velocity: tracker.linear_velocity,
+                    angular_velocity: tracker.angular_velocity,
+                })
+                .ok();
+        }
+
+        // TODO: Handle tracker disconnection/timeout
+        // - Track last seen timestamp for each tracker
+        // - Remove trackers that haven't been seen for a timeout period
+        // - Unregister them from OpenVR driver via C API function
     }
 }

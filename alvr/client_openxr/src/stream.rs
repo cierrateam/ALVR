@@ -628,6 +628,22 @@ fn stream_input_loop(
             body,
         });
 
+        // Send object tracker data separately if object tracking is enabled
+        if let Some(object_tracker) = &int_ctx.object_tracker {
+            if self.config.interaction_sources.object_tracking.is_some() {
+                let object_trackers = interaction::get_object_trackers(
+                    object_tracker, 
+                    now,
+                    6 // max_trackers - could be configured
+                );
+                if !object_trackers.is_empty() {
+                    core_ctx.send_object_trackers(alvr_packets::ObjectTrackers { 
+                        trackers: object_trackers 
+                    });
+                }
+            }
+        }
+
         let button_entries = interaction::update_buttons(&xr_session, &int_ctx.button_actions);
         if !button_entries.is_empty() {
             core_ctx.send_buttons(button_entries);
