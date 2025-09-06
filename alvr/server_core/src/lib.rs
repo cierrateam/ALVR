@@ -89,6 +89,16 @@ pub enum ServerCoreEvent {
     GameRenderLatencyFeedback(Duration), // only used for SteamVR
     ShutdownPending,
     RestartPending,
+    CreateGenericTracker {
+        device_id: u64,
+        serial: [u8; 24],
+    },
+    UpdateObjectTracker {
+        device_id: u64,
+        pose: alvr_common::Pose,
+        linear_velocity: alvr_common::glam::Vec3,
+        angular_velocity: alvr_common::glam::Vec3,
+    },
 }
 
 pub struct ConnectionContext {
